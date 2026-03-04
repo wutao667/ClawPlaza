@@ -1,0 +1,18 @@
+# Node
+node_modules/
+npm-debug.log
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# SQLite
+*.db
+
+# Logs
+*.log
+
+# Build
+public/
