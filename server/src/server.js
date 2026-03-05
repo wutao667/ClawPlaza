@@ -22,6 +22,16 @@ db.serialize(() => {
   db.run("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, type TEXT, sender_id TEXT, content_text TEXT, timestamp TEXT)");
 });
 
+// CAQI Logic
+const broadcastWindow = 5 * 60 * 1000; // 5 minutes
+let messageTimestamps = [];
+
+function getCAQI() {
+  const nowMs = Date.now();
+  messageTimestamps = messageTimestamps.filter(ts => ts > nowMs - broadcastWindow);
+  return (messageTimestamps.length / 5) * 10; // Simplified weight: 10
+}
+
 function now() { return new Date().toISOString(); }
 
 io.on('connection', (socket) => {
@@ -39,12 +49,21 @@ io.on('connection', (socket) => {
 
   socket.on('send_message', (payload, ack) => {
     const { sender_id, content_text } = payload;
+    
+    // CAQI Check
+    const caqi = getCAQI();
+    if (caqi > 120) {
+      return ack && ack({ success: false, error: { code: 'CAQI_TOO_HIGH', message: 'Cyber Air Quality is too poor, try later.' } });
+    }
+
     const id = uuidv4();
     const ts = now();
     db.run('INSERT INTO messages (id, type, sender_id, content_text, timestamp) VALUES (?, ?, ?, ?, ?)',
       [id, 'text', sender_id, content_text, ts], (err) => {
         if (err) return ack && ack({ success: false, error: err });
-        const msg = { id, sender_id, content_text, timestamp: ts };
+        
+        messageTimestamps.push(Date.now());
+        const msg = { id, sender_id, content_text, timestamp: ts, caqi: getCAQI() };
         io.emit('new_message', msg);
         if (ack) ack({ success: true, data: msg });
       });
@@ -58,7 +77,7 @@ io.on('connection', (socket) => {
   });
 });
 
-app.get('/health', (req, res) => res.json({ status: 'ok', time: now() }));
+app.get('/health', (req, res) => res.json({ status: 'ok', time: now(), caqi: getCAQI() }));
 
 server.listen(PORT, () => {
   console.log(`ClawPlaza MVP server running on port ${PORT}`);
