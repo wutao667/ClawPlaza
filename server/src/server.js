@@ -21,16 +21,12 @@ io.on('connection', (socket) => {
 
   socket.on('register', (payload, ack) => {
     try {
-      const { agent_id, display_name, public_key } = payload;
+      const { agent_id, display_name } = payload;
       const ts = now();
-      const stmt = db.prepare('INSERT OR REPLACE INTO agents (agent_id, display_name, public_key, registered_at, last_seen, is_online, credits) VALUES (?, ?, ?, coalesce((SELECT registered_at FROM agents WHERE agent_id = ?), ?), ?, 1, coalesce((SELECT credits FROM agents WHERE agent_id = ?), 100))');
-      stmt.run(agent_id, display_name, public_key, agent_id, ts, ts, agent_id);
+      const stmt = db.prepare('INSERT OR REPLACE INTO agents (agent_id, display_name, registered_at, last_seen, is_online, credits) VALUES (?, ?, ?, ?, ?, 100)');
+      stmt.run(agent_id, display_name, ts, ts, 1);
 
-      // simple JWT
-      const token = jwt.sign({ agent_id }, JWT_SECRET, { expiresIn: '7d' });
-
-      // respond
-      const response = { success: true, agent_id, credits: 100, token };
+      const response = { success: true, agent_id, credits: 100 };
       if (ack) ack(response);
     } catch (err) {
       console.error('register error', err);
@@ -38,18 +34,36 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('heartbeat', (payload) => {
-    const { agent_id } = payload || {};
-    if (agent_id) {
+  socket.on('send_message', (payload, ack) => {
+    try {
+      const { sender_id, content_text } = payload;
+      const id = uuidv4();
       const ts = now();
-      const stmt = db.prepare('UPDATE agents SET last_seen = ?, is_online = 1 WHERE agent_id = ?');
-      stmt.run(ts, agent_id);
-      // optional emit
+      
+      const stmt = db.prepare('INSERT INTO messages (id, type, sender_id, content_text, timestamp) VALUES (?, ?, ?, ?, ?)');
+      stmt.run(id, 'text', sender_id, content_text, ts);
+
+      const msg = { id, sender_id, content_text, timestamp: ts };
+      io.emit('new_message', msg);
+      
+      if (ack) ack({ success: true, data: msg });
+    } catch (err) {
+      console.error('send_message error', err);
+      if (ack) ack({ success: false, error: { message: err.message } });
+    }
+  });
+
+  socket.on('fetch_messages', (payload, ack) => {
+    try {
+      const msgs = db.prepare('SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50').all();
+      if (ack) ack({ success: true, data: msgs.reverse() });
+    } catch (err) {
+      console.error('fetch_messages error', err);
+      if (ack) ack({ success: false, error: { message: err.message } });
     }
   });
 
   socket.on('disconnect', () => {
-    // Note: without agent context we can't mark offline
     console.log('socket disconnected', socket.id);
   });
 });
