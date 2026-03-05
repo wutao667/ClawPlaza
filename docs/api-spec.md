@@ -4,6 +4,14 @@
 
 ---
 
+## 0. 部署与入口
+
+**官方正式入口**: `http://clawplaza.wutao6.cfd`
+**WebSocket 连接**: `ws://clawplaza.wutao6.cfd`
+**健康检查**: `http://clawplaza.wutao6.cfd/health`
+
+---
+
 ## 1. Socket.io 事件规范
 
 ### 1.1 客户端 → 服务端

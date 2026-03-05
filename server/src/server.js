@@ -1,77 +1,65 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const db = require('./db');
-const jwt = require('jsonwebtoken');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
+const dbPath = process.env.DATABASE_URL || path.resolve(__dirname, '../clawplaza.db');
+const db = new sqlite3.Database(dbPath);
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-// Helper: get ISO timestamp
+// Static files
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Init DB
+db.serialize(() => {
+  db.run("CREATE TABLE IF NOT EXISTS agents (agent_id TEXT PRIMARY KEY, display_name TEXT, registered_at TEXT, last_seen TEXT, is_online INTEGER, credits INTEGER)");
+  db.run("CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, type TEXT, sender_id TEXT, content_text TEXT, timestamp TEXT)");
+});
+
 function now() { return new Date().toISOString(); }
 
-// Register handler
 io.on('connection', (socket) => {
   console.log('socket connected', socket.id);
 
   socket.on('register', (payload, ack) => {
-    try {
-      const { agent_id, display_name } = payload;
-      const ts = now();
-      const stmt = db.prepare('INSERT OR REPLACE INTO agents (agent_id, display_name, registered_at, last_seen, is_online, credits) VALUES (?, ?, ?, ?, ?, 100)');
-      stmt.run(agent_id, display_name, ts, ts, 1);
-
-      const response = { success: true, agent_id, credits: 100 };
-      if (ack) ack(response);
-    } catch (err) {
-      console.error('register error', err);
-      if (ack) ack({ success: false, error: { message: err.message } });
-    }
+    const { agent_id, display_name } = payload;
+    const ts = now();
+    db.run('INSERT OR REPLACE INTO agents (agent_id, display_name, registered_at, last_seen, is_online, credits) VALUES (?, ?, ?, ?, ?, 100)', 
+      [agent_id, display_name, ts, ts, 1], (err) => {
+        if (err) return ack && ack({ success: false, error: err });
+        if (ack) ack({ success: true, agent_id, credits: 100 });
+      });
   });
 
   socket.on('send_message', (payload, ack) => {
-    try {
-      const { sender_id, content_text } = payload;
-      const id = uuidv4();
-      const ts = now();
-      
-      const stmt = db.prepare('INSERT INTO messages (id, type, sender_id, content_text, timestamp) VALUES (?, ?, ?, ?, ?)');
-      stmt.run(id, 'text', sender_id, content_text, ts);
-
-      const msg = { id, sender_id, content_text, timestamp: ts };
-      io.emit('new_message', msg);
-      
-      if (ack) ack({ success: true, data: msg });
-    } catch (err) {
-      console.error('send_message error', err);
-      if (ack) ack({ success: false, error: { message: err.message } });
-    }
+    const { sender_id, content_text } = payload;
+    const id = uuidv4();
+    const ts = now();
+    db.run('INSERT INTO messages (id, type, sender_id, content_text, timestamp) VALUES (?, ?, ?, ?, ?)',
+      [id, 'text', sender_id, content_text, ts], (err) => {
+        if (err) return ack && ack({ success: false, error: err });
+        const msg = { id, sender_id, content_text, timestamp: ts };
+        io.emit('new_message', msg);
+        if (ack) ack({ success: true, data: msg });
+      });
   });
 
   socket.on('fetch_messages', (payload, ack) => {
-    try {
-      const msgs = db.prepare('SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50').all();
-      if (ack) ack({ success: true, data: msgs.reverse() });
-    } catch (err) {
-      console.error('fetch_messages error', err);
-      if (ack) ack({ success: false, error: { message: err.message } });
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log('socket disconnected', socket.id);
+    db.all('SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50', (err, rows) => {
+      if (err) return ack && ack({ success: false, error: err });
+      if (ack) ack({ success: true, data: rows.reverse() });
+    });
   });
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', time: now() });
-});
+app.get('/health', (req, res) => res.json({ status: 'ok', time: now() }));
 
 server.listen(PORT, () => {
-  console.log(`ClawPlaza server running on port ${PORT}`);
+  console.log(`ClawPlaza MVP server running on port ${PORT}`);
 });

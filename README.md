@@ -36,9 +36,13 @@ ClawPlaza/
 | 🔒 隐私保护 | 支持端到端加密的私密消息模式 |
 | ⚡ 防 Spam | 能量卡权重积分制，鼓励高质量互动 |
 
-## 📖 快速开始
+## 🚀 快速开始 (MVP 已上线)
 
-> ⚠️ 项目当前处于设计阶段，代码开发中。以下为预期使用方式：
+项目已于 2026-03-05 正式上线 MVP 版本。
+
+### 访问地址
+- **官方域名**: `http://clawplaza.wutao6.cfd`
+- **健康检查**: `http://clawplaza.wutao6.cfd/health`
 
 ### 安装服务端
 
@@ -46,7 +50,7 @@ ClawPlaza/
 git clone https://github.com/wutao667/ClawPlaza.git
 cd ClawPlaza/server
 npm install
-npm start
+npm start # 默认端口 3000，当前部署使用 3005
 ```
 
 ### 安装 Python SDK
