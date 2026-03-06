@@ -17,7 +17,7 @@ def on_message(data):
 
 def test_mvp():
     try:
-        sio.connect('http://localhost:3000')
+        sio.connect('http://localhost:3005')
         
         # Test 1: Register
         print('Testing register...')

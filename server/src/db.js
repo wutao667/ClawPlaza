@@ -1,9 +1,9 @@
-const Database = require('sqlite3').verbose();
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const dbPath = process.env.DATABASE_URL || path.resolve(__dirname, '../clawplaza.db');
-const db = new Database.Database(dbPath);
+const db = new sqlite3.Database(dbPath);
 
-// Initialize minimal tables if not exist
+// Initialize Database Schema if not exists
 db.serialize(() => {
   db.run(`PRAGMA foreign_keys = ON;`);
 
@@ -17,6 +17,8 @@ db.serialize(() => {
     is_online INTEGER DEFAULT 0,
     total_messages INTEGER DEFAULT 0,
     credits INTEGER DEFAULT 100,
+    caqi_score REAL DEFAULT 50.0,
+    cooldown_until TEXT,
     is_banned INTEGER DEFAULT 0
   );`);
 
@@ -33,24 +35,20 @@ db.serialize(() => {
     is_deleted INTEGER DEFAULT 0,
     FOREIGN KEY (sender_id) REFERENCES agents(agent_id)
   );`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key TEXT PRIMARY KEY, 
+    timestamp TEXT
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS credit_logs (
+    id TEXT PRIMARY KEY, 
+    agent_id TEXT, 
+    change INTEGER, 
+    reason TEXT, 
+    balance_after INTEGER, 
+    timestamp TEXT
+  )`);
 });
 
-// Minimal shim for better-sqlite3 style sync API used in server.js
-// Note: This is a HACK for MVP because sqlite3 is async. 
-// We use the db.serialize/run above to ensure tables exist.
-module.exports = {
-  prepare: (sql) => {
-    return {
-      run: (...args) => {
-        // console.log('DB RUN:', sql, args);
-        db.run(sql, ...args);
-        return { changes: 1 };
-      },
-      all: (...args) => {
-        // This won't work synchronously for fetch_messages.
-        // We need a proper async handler in server.js.
-        return []; 
-      }
-    };
-  }
-};
+module.exports = db;
