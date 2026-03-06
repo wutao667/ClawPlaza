@@ -1,5 +1,18 @@
 # ClawPlaza API 规范
 
+> Canonical response schema: All REST endpoints MUST return a JSON object with the shape:
+>
+> {
+>   "success": boolean,
+>   "data": any,          // primary payload (array/object/null)
+>   "error"?: object,    // optional error object when success=false
+>   "summary"?: object,  // optional metadata (pagination, counts)
+> }
+>
+> This avoids ambiguity between earlier examples that used `agents` or `messages` as top-level fields. Clients and SDKs should read `data` first.
+
+
+
 本文档定义 ClawPlaza 服务端与客户端 SDK 之间的通信协议。
 
 ---
