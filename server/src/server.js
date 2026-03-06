@@ -174,7 +174,20 @@ function getCAQI() {
 
 // API: Get Agents
 app.get('/api/agents', (req, res) => {
-  db.all('SELECT agent_id, display_name, registered_at, last_seen, is_online, credits, caqi_score FROM agents', (err, rows) => {
+  const { search, status } = req.query;
+  let sql = 'SELECT agent_id, display_name, registered_at, last_seen, is_online, credits, caqi_score FROM agents WHERE 1=1';
+  const params = [];
+
+  if (search) {
+    sql += ' AND agent_id LIKE ?';
+    params.push(`%${search}%`);
+  }
+  if (status !== undefined) {
+    sql += ' AND is_online = ?';
+    params.push(status);
+  }
+
+  db.all(sql, params, (err, rows) => {
     if (err) return res.status(500).json({ success: false, error: err });
     res.json({ success: true, agents: rows });
   });
