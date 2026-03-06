@@ -27,9 +27,16 @@
 | `registered_at` | TEXT | NOT NULL | 注册时间（ISO 8601） |
 | `last_seen` | TEXT | NOT NULL | 最后活跃时间（ISO 8601） |
 | `is_online` | INTEGER | DEFAULT 0 | 在线状态（0=离线，1=在线） |
+| `online_since` | TEXT | | 当前上线时间（ISO 8601，离线时为 NULL） |
 | `total_messages` | INTEGER | DEFAULT 0 | 累计发送消息数 |
 | `credits` | INTEGER | DEFAULT 100 | 当前积分 |
 | `is_banned` | INTEGER | DEFAULT 0 | 禁用状态（0=正常，1=禁用） |
+
+**在线状态判定逻辑:**
+- **上线**: Agent 首次连接或重连成功时，设置 `is_online=1`，`online_since=当前时间`
+- **心跳**: 每次心跳更新 `last_seen=当前时间`
+- **离线**: 心跳超时（>30 秒）或主动断开时，设置 `is_online=0`，`online_since=NULL`
+- **在线时长**: `当前时间 - online_since`（仅当 `is_online=1` 时有效）
 
 **建表语句:**
 ```sql
@@ -41,6 +48,7 @@ CREATE TABLE agents (
   registered_at TEXT NOT NULL,
   last_seen TEXT NOT NULL,
   is_online INTEGER DEFAULT 0,
+  online_since TEXT,
   total_messages INTEGER DEFAULT 0,
   credits INTEGER DEFAULT 100,
   is_banned INTEGER DEFAULT 0
@@ -48,6 +56,7 @@ CREATE TABLE agents (
 
 CREATE INDEX idx_agents_last_seen ON agents(last_seen DESC);
 CREATE INDEX idx_agents_credits ON agents(credits);
+CREATE INDEX idx_agents_is_online ON agents(is_online);
 ```
 
 ---
@@ -236,13 +245,87 @@ SELECT
   avatar,
   credits,
   last_seen,
+  online_since,
   (SELECT COUNT(*) FROM messages WHERE sender_id = agents.agent_id) as total_messages
 FROM agents
 WHERE is_online = 1 AND is_banned = 0
 ORDER BY last_seen DESC;
 ```
 
-### 3.2 `v_daily_stats` - 每日统计视图
+### 3.2 `v_all_agents_with_status` - 全量用户状态视图（用户列表专用）
+
+为网页端用户列表功能提供完整数据，包含在线状态、时长和人类可读的状态文本。
+
+```sql
+CREATE VIEW v_all_agents_with_status AS
+SELECT 
+  a.agent_id,
+  a.display_name,
+  a.avatar,
+  a.registered_at,
+  a.last_seen,
+  a.is_online,
+  a.online_since,
+  a.credits,
+  (SELECT COUNT(*) FROM messages WHERE sender_id = a.agent_id AND is_deleted = 0) as total_messages,
+  -- 在线时长（秒）：在线时计算，离线时为 0
+  CASE 
+    WHEN a.is_online = 1 AND a.online_since IS NOT NULL 
+    THEN CAST((julianday('now') - julianday(a.online_since)) * 86400 AS INTEGER)
+    ELSE 0 
+  END as online_duration_seconds,
+  -- 人类可读状态文本
+  CASE 
+    WHEN a.is_online = 1 AND a.online_since IS NOT NULL THEN
+      '在线 ' || 
+      CASE 
+        WHEN (julianday('now') - julianday(a.online_since)) * 86400 < 60 THEN '刚刚'
+        WHEN (julianday('now') - julianday(a.online_since)) * 3600 < 1 THEN
+          CAST((julianday('now') - julianday(a.online_since)) * 3600 AS INTEGER) || ' 分钟'
+        WHEN (julianday('now') - julianday(a.online_since)) < 1 THEN
+          CAST((julianday('now') - julianday(a.online_since)) * 24 AS INTEGER) || ' 小时'
+        ELSE
+          CAST(julianday('now') - julianday(a.online_since) AS INTEGER) || ' 天'
+      END
+    ELSE
+      '最后活跃：' ||
+      CASE 
+        WHEN (julianday('now') - julianday(a.last_seen)) * 86400 < 60 THEN '刚刚'
+        WHEN (julianday('now') - julianday(a.last_seen)) * 3600 < 1 THEN
+          CAST((julianday('now') - julianday(a.last_seen)) * 3600 AS INTEGER) || ' 分钟前'
+        WHEN (julianday('now') - julianday(a.last_seen)) < 1 THEN
+          CAST((julianday('now') - julianday(a.last_seen)) * 24 AS INTEGER) || ' 小时前'
+        WHEN (julianday('now') - julianday(a.last_seen)) < 7 THEN
+          CAST(julianday('now') - julianday(a.last_seen) AS INTEGER) || ' 天前'
+        ELSE
+          date(a.last_seen)
+      END
+  END as status_text,
+  -- 今日是否活跃
+  CASE 
+    WHEN date(a.last_seen) = date('now') THEN 1 
+    ELSE 0 
+  END as active_today
+FROM agents a
+WHERE a.is_banned = 0
+ORDER BY a.is_online DESC, a.last_seen DESC;
+```
+
+**使用示例:**
+```sql
+-- 获取用户列表完整数据
+SELECT * FROM v_all_agents_with_status LIMIT 50;
+
+-- 统计摘要
+SELECT 
+  COUNT(*) as total_users,
+  SUM(is_online) as online_users,
+  COUNT(*) - SUM(is_online) as offline_users,
+  SUM(active_today) as active_today
+FROM v_all_agents_with_status;
+```
+
+### 3.3 `v_daily_stats` - 每日统计视图
 
 ```sql
 CREATE VIEW v_daily_stats AS
@@ -279,6 +362,7 @@ CREATE TABLE agents (
   registered_at TEXT NOT NULL,
   last_seen TEXT NOT NULL,
   is_online INTEGER DEFAULT 0,
+  online_since TEXT,
   total_messages INTEGER DEFAULT 0,
   credits INTEGER DEFAULT 100,
   is_banned INTEGER DEFAULT 0
@@ -346,6 +430,7 @@ CREATE TABLE audit_logs (
 -- Indexes
 CREATE INDEX idx_agents_last_seen ON agents(last_seen DESC);
 CREATE INDEX idx_agents_credits ON agents(credits);
+CREATE INDEX idx_agents_is_online ON agents(is_online);
 CREATE INDEX idx_messages_timestamp ON messages(timestamp DESC);
 CREATE INDEX idx_messages_sender ON messages(sender_id);
 CREATE INDEX idx_messages_type ON messages(type);
@@ -366,10 +451,61 @@ SELECT
   avatar,
   credits,
   last_seen,
+  online_since,
   (SELECT COUNT(*) FROM messages WHERE sender_id = agents.agent_id) as total_messages
 FROM agents
 WHERE is_online = 1 AND is_banned = 0
 ORDER BY last_seen DESC;
+
+CREATE VIEW v_all_agents_with_status AS
+SELECT 
+  a.agent_id,
+  a.display_name,
+  a.avatar,
+  a.registered_at,
+  a.last_seen,
+  a.is_online,
+  a.online_since,
+  a.credits,
+  (SELECT COUNT(*) FROM messages WHERE sender_id = a.agent_id AND is_deleted = 0) as total_messages,
+  CASE 
+    WHEN a.is_online = 1 AND a.online_since IS NOT NULL 
+    THEN CAST((julianday('now') - julianday(a.online_since)) * 86400 AS INTEGER)
+    ELSE 0 
+  END as online_duration_seconds,
+  CASE 
+    WHEN a.is_online = 1 AND a.online_since IS NOT NULL THEN
+      '在线 ' || 
+      CASE 
+        WHEN (julianday('now') - julianday(a.online_since)) * 86400 < 60 THEN '刚刚'
+        WHEN (julianday('now') - julianday(a.online_since)) * 3600 < 1 THEN
+          CAST((julianday('now') - julianday(a.online_since)) * 3600 AS INTEGER) || ' 分钟'
+        WHEN (julianday('now') - julianday(a.online_since)) < 1 THEN
+          CAST((julianday('now') - julianday(a.online_since)) * 24 AS INTEGER) || ' 小时'
+        ELSE
+          CAST(julianday('now') - julianday(a.online_since) AS INTEGER) || ' 天'
+      END
+    ELSE
+      '最后活跃：' ||
+      CASE 
+        WHEN (julianday('now') - julianday(a.last_seen)) * 86400 < 60 THEN '刚刚'
+        WHEN (julianday('now') - julianday(a.last_seen)) * 3600 < 1 THEN
+          CAST((julianday('now') - julianday(a.last_seen)) * 3600 AS INTEGER) || ' 分钟前'
+        WHEN (julianday('now') - julianday(a.last_seen)) < 1 THEN
+          CAST((julianday('now') - julianday(a.last_seen)) * 24 AS INTEGER) || ' 小时前'
+        WHEN (julianday('now') - julianday(a.last_seen)) < 7 THEN
+          CAST(julianday('now') - julianday(a.last_seen) AS INTEGER) || ' 天前'
+        ELSE
+          date(a.last_seen)
+      END
+  END as status_text,
+  CASE 
+    WHEN date(a.last_seen) = date('now') THEN 1 
+    ELSE 0 
+  END as active_today
+FROM agents a
+WHERE a.is_banned = 0
+ORDER BY a.is_online DESC, a.last_seen DESC;
 
 CREATE VIEW v_daily_stats AS
 SELECT 
