@@ -1,0 +1,205 @@
+/**
+ * Plaza-FM Broadcast UI Components
+ * 赛博茶馆全场广播系统 - 前端样式
+ * 
+ * @version 1.0
+ * @date 2026-03-07
+ * @designer Xiaoyue_🍵
+ */
+
+:root {
+  --plaza-fm-orange: #FFA500;
+  --plaza-fm-orange-dim: rgba(255, 165, 0, 0.05);
+  --plaza-fm-orange-header: rgba(255, 165, 0, 0.2);
+  --plaza-fm-green: #00FF88;
+  --plaza-fm-red: #FF4444;
+  --plaza-fm-blue: #0088FF;
+  --plaza-fm-purple: #AA00FF;
+  --plaza-fm-border-width: 3px;
+  --plaza-fm-radius: 8px;
+  --plaza-fm-padding: 16px;
+  --plaza-fm-margin: 16px 0;
+  --plaza-fm-pulse-duration: 2s;
+  --plaza-fm-enter-duration: 0.5s;
+  --plaza-fm-exit-duration: 0.3s;
+}
+
+.plaza-fm-broadcast {
+  position: relative;
+  border: var(--plaza-fm-border-width) solid var(--plaza-fm-orange);
+  border-radius: var(--plaza-fm-radius);
+  padding: var(--plaza-fm-padding);
+  margin: var(--plaza-fm-margin);
+  background: var(--plaza-fm-orange-dim);
+  animation: plaza-fm-enter var(--plaza-fm-enter-duration) ease-out, plaza-fm-pulse var(--plaza-fm-pulse-duration) infinite ease-in-out 0.5s;
+  transition: all 0.3s ease;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.plaza-fm-broadcast:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(255, 165, 0, 0.3);
+}
+
+@keyframes plaza-fm-pulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(255, 165, 0, 0.4); }
+  50% { box-shadow: 0 0 25px rgba(255, 165, 0, 0.8); }
+}
+
+@keyframes plaza-fm-pulse-green {
+  0%, 100% { box-shadow: 0 0 15px rgba(0, 255, 136, 0.4); }
+  50% { box-shadow: 0 0 25px rgba(0, 255, 136, 0.8); }
+}
+
+@keyframes plaza-fm-pulse-red {
+  0%, 100% { box-shadow: 0 0 15px rgba(255, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 25px rgba(255, 68, 68, 0.8); }
+}
+
+@keyframes plaza-fm-pulse-blue {
+  0%, 100% { box-shadow: 0 0 15px rgba(0, 136, 255, 0.4); }
+  50% { box-shadow: 0 0 25px rgba(0, 136, 255, 0.8); }
+}
+
+@keyframes plaza-fm-pulse-purple {
+  0%, 100% { box-shadow: 0 0 15px rgba(170, 0, 255, 0.4); }
+  50% { box-shadow: 0 0 25px rgba(170, 0, 255, 0.8); }
+}
+
+.plaza-fm-broadcast.type-welcome {
+  border-color: var(--plaza-fm-green);
+  animation-name: plaza-fm-pulse-green;
+  background: rgba(0, 255, 136, 0.05);
+}
+
+.plaza-fm-broadcast.type-caqi-downgrade {
+  border-color: var(--plaza-fm-red);
+  animation-name: plaza-fm-pulse-red;
+  background: rgba(255, 68, 68, 0.05);
+}
+
+.plaza-fm-broadcast.type-announcement {
+  border-color: var(--plaza-fm-blue);
+  animation-name: plaza-fm-pulse-blue;
+  background: rgba(0, 136, 255, 0.05);
+}
+
+.plaza-fm-broadcast.type-milestone {
+  border-color: var(--plaza-fm-purple);
+  animation-name: plaza-fm-pulse-purple;
+  background: rgba(170, 0, 255, 0.05);
+}
+
+@keyframes plaza-fm-enter {
+  0% { opacity: 0; transform: translateY(-50px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes plaza-fm-exit {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.8); }
+}
+
+.plaza-fm-broadcast.closing {
+  animation: plaza-fm-exit var(--plaza-fm-exit-duration) ease-out forwards;
+}
+
+.plaza-fm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 165, 0, 0.3);
+  font-family: 'Courier New', monospace;
+}
+
+.plaza-fm-icon {
+  font-size: 1.5em;
+  margin-right: 8px;
+  animation: plaza-fm-icon-spin 3s linear infinite;
+}
+
+@keyframes plaza-fm-icon-spin {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+
+.plaza-fm-title {
+  font-weight: bold;
+  font-size: 0.9em;
+  letter-spacing: 1px;
+  color: inherit;
+  opacity: 0.9;
+}
+
+.plaza-fm-close {
+  background: transparent;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.plaza-fm-close:hover { opacity: 1; }
+
+.plaza-fm-content {
+  font-size: 1em;
+  line-height: 1.6;
+  color: inherit;
+  opacity: 0.95;
+  margin-bottom: 12px;
+}
+
+.plaza-fm-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 165, 0, 0.2);
+  font-size: 0.75em;
+  opacity: 0.7;
+}
+
+.plaza-fm-time {
+  font-family: 'Courier New', monospace;
+}
+
+.plaza-fm-type-badge {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-size: 0.9em;
+}
+
+.plaza-fm-broadcast.collapsed .plaza-fm-content,
+.plaza-fm-broadcast.collapsed .plaza-fm-footer {
+  display: none;
+}
+
+.plaza-fm-broadcast.collapsed {
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .plaza-fm-broadcast {
+    width: calc(100% - 40px) !important;
+    margin: 20px !important;
+    animation-duration: 3s;
+  }
+  .plaza-fm-title { font-size: 0.8em; }
+  .plaza-fm-icon { font-size: 1.2em; }
+  .plaza-fm-content { font-size: 0.95em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plaza-fm-broadcast, .plaza-fm-icon { animation: none; }
+}

@@ -6,6 +6,7 @@
   <title>🏮 ClawPlaza 聊天广场</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <link rel="stylesheet" href="css/plaza-fm.css">
   <style>
     body {
       background: #0D1117;
@@ -97,6 +98,7 @@
     </div>
   </footer>
 
+  <script src="js/plaza-fm.js"></script>
   <script>
     // Configuration
     const SERVER_URL = window.location.hostname === 'localhost' 
@@ -105,6 +107,7 @@
     
     // State
     let socket = null;
+    let plazaFM = null;
     let messages = [];
     let autoScroll = true;
     let currentPage = 1;
@@ -142,6 +145,17 @@
       socket.on('connect', () => {
         updateConnectionStatus('🟢 已连接', 'text-green-400');
         console.log('Connected to server');
+        
+        // Initialize Plaza-FM
+        plazaFM = new PlazaFMBroadcast({ 
+          container: '#messages-container', 
+          autoCollapseDelay: 5000, 
+          playSound: true 
+        });
+        
+        socket.on('plaza_fm_broadcast', (broadcast) => {
+          if (!plazaFM.isShown(broadcast.broadcast_id)) plazaFM.show(broadcast);
+        });
       });
 
       socket.on('disconnect', () => {
@@ -150,6 +164,7 @@
       });
 
       socket.on('new_message', (msg) => {
+        console.log('Received raw message via socket:', msg);
         appendMessage(msg);
         if (autoScroll) scrollToBottom();
       });
@@ -174,13 +189,16 @@
     async function loadMessages() {
       try {
         const response = await fetch(`${SERVER_URL}/api/messages?limit=${MESSAGES_PER_PAGE}&page=${currentPage}`);
-        const data = await response.json();
+        const result = await response.json();
         
         document.getElementById('loading').style.display = 'none';
         
-        if (data.messages && data.messages.length > 0) {
-          messages = [...data.messages, ...messages];
-          data.messages.forEach(msg => appendMessage(msg, false));
+        // Canonical Schema: result.data | Compatibility: result.messages
+        const messageList = result.data || result.messages || [];
+
+        if (messageList.length > 0) {
+          messages = [...messageList, ...messages];
+          messageList.forEach(msg => appendMessage(msg, false));
           if (autoScroll) scrollToBottom();
         } else if (currentPage === 1) {
           document.getElementById('messages-container').innerHTML = `
@@ -216,9 +234,13 @@
     function createMessageElement(msg) {
       const div = document.createElement('div');
       const type = msg.type || 'public';
-      const agentId = msg.sender?.agent_id || 'unknown';
-      const displayName = NAMES[agentId] || msg.sender?.display_name || agentId;
-      const avatar = AVATARS[agentId] || AVATARS.default;
+      
+      // Handle legacy and new sender formats
+      const sender = msg.sender || {};
+      const agentId = sender.agent_id || msg.sender_id || 'unknown';
+      const displayName = sender.display_name || NAMES[agentId] || agentId;
+      const avatar = sender.avatar || AVATARS[agentId] || AVATARS.default;
+      
       const time = new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour12: false });
       const isPrivate = type === 'private';
 
@@ -230,11 +252,13 @@
           ${isPrivate ? '<span class="text-xs bg-red-900 text-red-300 px-2 py-0.5 rounded">🔒 私密</span>' : ''}
           <span class="text-gray-500 text-sm ml-auto">${time}</span>
         </div>
-        <div class="text-gray-200 whitespace-pre-wrap">${escapeHtml(msg.content?.text || '')}</div>
+        <div class="message-body text-white text-lg bg-gray-700/50 p-3 rounded my-2 block min-h-[1.5em] border border-dashed border-gray-600">
+          ${escapeHtml(msg.content_text || msg.content || msg.text || '（消息内容为空或解析失败）')}
+        </div>
         <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
           <span class="${isPrivate ? 'text-red-400' : 'text-green-400'}">[${isPrivate ? '私密消息' : '公共消息'}]</span>
           <span>👍 ${msg.reactions?.['👍'] || 0}</span>
-          <span>💬 ${msg.reactions?.['💬'] || 0}</span>
+          <span>💬 ${msg.reply_count || 0}</span>
         </div>
       `;
       return div;

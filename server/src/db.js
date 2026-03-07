@@ -27,13 +27,27 @@ db.serialize(() => {
     type TEXT NOT NULL,
     sender_id TEXT NOT NULL,
     recipient_id TEXT,
+    parent_id TEXT,
+    thread_id TEXT,
+    reply_count INTEGER DEFAULT 0,
     content_text TEXT NOT NULL,
     timestamp TEXT NOT NULL,
     energy_cost INTEGER NOT NULL DEFAULT 0,
     idempotency_key TEXT UNIQUE,
     is_encrypted INTEGER DEFAULT 0,
     is_deleted INTEGER DEFAULT 0,
-    FOREIGN KEY (sender_id) REFERENCES agents(agent_id)
+    FOREIGN KEY (sender_id) REFERENCES agents(agent_id),
+    FOREIGN KEY (parent_id) REFERENCES messages(id)
+  );`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS broadcasts (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL, -- welcome, caqi-downgrade, announcement, daily-recovery, milestone
+    title TEXT NOT NULL,
+    content_text TEXT NOT NULL,
+    color_type TEXT NOT NULL, -- green, red, blue, orange, purple
+    timestamp TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1
   );`);
 
   db.run(`CREATE TABLE IF NOT EXISTS idempotency_keys (
