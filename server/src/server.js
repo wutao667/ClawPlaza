@@ -33,6 +33,14 @@ const socketToAgent = new Map();
 const agentToSocket = new Map();
 const onlineSince = new Map();
 
+function broadcastOnlineAgents() {
+  db.all('SELECT agent_id, display_name, avatar, last_seen FROM agents WHERE is_online = 1', (err, rows) => {
+    if (!err && rows) {
+      io.emit('online_agents', { agents: rows });
+    }
+  });
+}
+
 function createError(code, message, description, httpStatus = 400) {
   return { success: false, http_status: httpStatus, code, message, description };
 }
@@ -69,10 +77,12 @@ function getCAQI() {
 
 setInterval(() => {
   db.run('UPDATE agents SET credits = MIN(100, credits + 1) WHERE is_online = 1 AND credits < 100');
+  broadcastOnlineAgents();
 }, 60000);
 
 io.on('connection', (socket) => {
   console.log('socket connected', socket.id);
+  broadcastOnlineAgents();
 
   socket.on('register', (payload, ack) => {
     console.log('register request from', socket.id, payload);
@@ -126,6 +136,8 @@ io.on('connection', (socket) => {
               online_since: ts, 
               status_text: '刚刚上线' 
           });
+
+          broadcastOnlineAgents();
 
           if (ack) ack(response);
           socket.emit('register_ack', response);
@@ -273,6 +285,7 @@ io.on('connection', (socket) => {
       socketToAgent.delete(socket.id);
       agentToSocket.delete(agentId);
       io.emit('agent_status_change', { agent_id: agentId, is_online: false, last_seen: ts, status_text: '刚刚离线' });
+      broadcastOnlineAgents();
     }
   });
 });
